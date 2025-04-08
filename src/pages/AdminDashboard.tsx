@@ -8,7 +8,6 @@ interface ClubMembership {
   id: string;
   user_id: string;
   club_id: string;
-  role: string;
   joined_at: string;
   user_full_name: string; // Added from join
   club_name: string;      // Added from join
@@ -31,7 +30,6 @@ export function AdminDashboard() {
             id,
             user_id,
             club_id,
-            role,
             joined_at,
             user:profiles ( full_name ),
             club:clubs ( name )
@@ -46,7 +44,6 @@ export function AdminDashboard() {
           id: item.id,
           user_id: item.user_id,
           club_id: item.club_id,
-          role: item.role,
           joined_at: item.joined_at,
           // Access nested data safely
           user_full_name: item.user?.full_name || 'Unknown User',
@@ -85,7 +82,6 @@ export function AdminDashboard() {
                 <tr>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Club</th>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Member</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Joined</th>
                 </tr>
               </thead>
@@ -94,7 +90,6 @@ export function AdminDashboard() {
                   <tr key={member.id}>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{member.club_name}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{member.user_full_name}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{member.role}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(member.joined_at).toLocaleDateString()}</td>
                   </tr>
                 ))}
