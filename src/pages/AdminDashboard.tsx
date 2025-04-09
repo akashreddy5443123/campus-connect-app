@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase'; // Import supabase
+import { Trash2 } from 'lucide-react';
 
 // Define types for data
 interface ClubMembership {
@@ -9,12 +10,14 @@ interface ClubMembership {
   joined_at: string;
   user_full_name: string; // Added from join
   club_name: string;      // Added from join
+  role: string;
 }
 
 export function AdminDashboard() {
   const [memberships, setMemberships] = useState<ClubMembership[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchClubMemberships = async () => {
@@ -47,6 +50,7 @@ export function AdminDashboard() {
           // Access nested data safely
           user_full_name: item.user?.full_name || 'Unknown User',
           club_name: item.club?.name || 'Unknown Club',
+          role: item.role,
         })) || [];
 
         setMemberships(formattedData);
@@ -60,6 +64,27 @@ export function AdminDashboard() {
 
     fetchClubMemberships();
   }, []);
+
+  const handleRemoveMember = async (id: string, userFullName: string, clubName: string) => {
+    setActionLoadingId(id);
+    try {
+      const { data, error } = await supabase
+        .from('club_memberships')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      setMemberships((prevMemberships) =>
+        prevMemberships.filter((member) => member.id !== id)
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to remove member');
+      console.error("Error removing member:", err);
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -81,7 +106,9 @@ export function AdminDashboard() {
                 <tr>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Club</th>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Member</th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Joined</th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
@@ -89,7 +116,22 @@ export function AdminDashboard() {
                   <tr key={member.id}>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{member.club_name}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{member.user_full_name}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{member.role}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(member.joined_at).toLocaleDateString()}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <button
+                        onClick={() => handleRemoveMember(member.id, member.user_full_name, member.club_name)}
+                        disabled={actionLoadingId === member.id}
+                        className={`text-red-600 hover:text-red-800 disabled:opacity-50 disabled:cursor-not-allowed`}
+                        title="Remove Member"
+                      >
+                        {actionLoadingId === member.id ? (
+                          'Removing...'
+                        ) : (
+                          <Trash2 className="h-4 w-4" />
+                        )}
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
