@@ -1,5 +1,3 @@
-import React from 'react';
-
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase'; // Import supabase
 
@@ -30,11 +28,12 @@ export function AdminDashboard() {
             id,
             user_id,
             club_id,
+            role,
             joined_at,
             user:profiles ( full_name ),
             club:clubs ( name )
           `)
-          .order('club_name', { ascending: true })
+          .order('name', { foreignTable: 'clubs', ascending: true })
           .order('joined_at', { ascending: true });
 
         if (error) throw error;
