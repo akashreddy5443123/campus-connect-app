@@ -1,22 +1,57 @@
 # Campus Connect - Event & Club Management App
 
-This is a web application built with React, TypeScript, Vite, Tailwind CSS, and Supabase to manage campus events, clubs, and announcements, featuring role-based permissions.
+A modern web application built with React, TypeScript, Vite, Tailwind CSS, and Supabase to manage campus events, clubs, and announcements, featuring role-based permissions and a beautiful, responsive design.
 
 ## Features
 
-*   **Homepage:** Displays featured events, latest announcements, and quick links to event/club directories. Includes a search bar for events, clubs, and announcements.
-*   **Events:** Browse upcoming events, view details on a dedicated page (`/events/:eventId`), and register/unregister.
-*   **Clubs:** Browse student clubs, view details, and join/leave clubs.
-*   **Announcements:** View campus announcements. Admins can create announcements, and creators/admins can edit/delete them.
-*   **Authentication:** User sign-up, sign-in, and password reset using Supabase Auth.
-*   **User Profile:** View and edit user profile information (name, DOB, phone, bio).
-*   **Event/Club Creation:** Modals for creating new events and clubs.
+*   **Modern UI Design:**
+    *   Beautiful hero section with background image and search functionality
+    *   Clean, card-based layout for events, clubs, and announcements
+    *   Responsive design that works on all devices
+    *   Consistent white text theme with proper contrast
+*   **Homepage:** 
+    *   Hero section with search functionality
+    *   Featured events with image uploads
+    *   Latest announcements
+    *   Quick links to event/club directories
+*   **Events:** 
+    *   Browse upcoming events with image previews
+    *   View details on a dedicated page (`/events/:eventId`)
+    *   Register/unregister for events
+    *   Image upload support for event covers
+*   **Clubs:** 
+    *   Browse student clubs with cover images
+    *   View details and join/leave clubs
+    *   Image upload support for club covers
+*   **Announcements:** 
+    *   View campus announcements
+    *   Admins can create announcements
+    *   Creators/admins can edit/delete them
+*   **Authentication:** 
+    *   User sign-up, sign-in, and password reset using Supabase Auth
+    *   Secure session management
+*   **User Profile:** 
+    *   View and edit user profile information
+    *   Customizable profile settings
+*   **Event/Club Creation:** 
+    *   Modals for creating new events and clubs
+    *   Image upload support
+    *   Rich text descriptions
+*   **Search Functionality:**
+    *   Global search across events, clubs, and announcements
+    *   Real-time search results
+    *   Clean, white-text results display
 *   **Permissions:**
-    *   **Admin Role:** An `is_admin` flag in the `profiles` table grants administrative privileges.
-    *   **Creator/Admin Control:** Only the user who created an event/club/announcement or an admin can update or delete it.
-    *   **Admin-Only Creation:** Only admins can create announcements.
-*   **Notifications:** A dropdown menu accessible via the bell icon in the header displays the 5 most recent announcements.
-*   **Footer:** Displays contact information, social media links, credits, and copyright details.
+    *   **Admin Role:** An `is_admin` flag in the `profiles` table grants administrative privileges
+    *   **Creator/Admin Control:** Only the user who created an event/club/announcement or an admin can update or delete it
+    *   **Admin-Only Creation:** Only admins can create announcements
+*   **Notifications:** 
+    *   Dropdown menu accessible via the bell icon
+    *   Displays the 5 most recent announcements
+*   **Footer:** 
+    *   Contact information
+    *   Social media links
+    *   Credits and copyright details
 
 ## Project Structure
 
@@ -49,7 +84,20 @@ This is a web application built with React, TypeScript, Vite, Tailwind CSS, and 
 
 ## Key Files & Functionality
 
-*   **`src/App.tsx`**: Sets up the main layout, routing (using `react-router-dom`), including the event detail route (`/events/:eventId`). Fetches/displays announcements on the homepage.
+*   **`src/App.tsx`**: 
+    *   Sets up the main layout and routing
+    *   Implements the hero section with search
+    *   Manages the responsive design
+*   **`src/pages/SearchPage.tsx`**: 
+    *   Handles global search functionality
+    *   Displays search results with white text theme
+    *   Organizes results by category (events, clubs, announcements)
+*   **`src/components/CreateEventModal.tsx`**: 
+    *   Handles event creation with image upload
+    *   Rich form validation
+*   **`src/components/CreateClubModal.tsx`**: 
+    *   Handles club creation with image upload
+    *   Form validation and error handling
 *   **`src/main.tsx`**: Renders the root React component (`App`) into the DOM. Imports global CSS.
 *   **`src/index.css`**: Includes Tailwind CSS base, components, and utilities. Defines global `body` styles for the theme.
 *   **`src/lib/supabase.ts`**: Initializes the Supabase client using credentials from `.env`.
@@ -69,37 +117,42 @@ This is a web application built with React, TypeScript, Vite, Tailwind CSS, and 
 
 ## Getting Started
 
-1.  **Clone the repository.**
+1.  **Clone the repository:**
+    ```bash
+    git clone https://github.com/yourusername/campus-connect-app.git
+    cd campus-connect-app
+    ```
+
 2.  **Install dependencies:**
     ```bash
     npm install
     ```
+
 3.  **Set up Supabase:**
-    *   Create a project on [Supabase](https://supabase.com/).
-    *   In your Supabase project dashboard, go to **SQL Editor** and run the SQL commands from the files in the `supabase/migrations/` directory in chronological order to set up your database schema. **Ensure all migrations, including those adding `is_admin` and updating RLS policies, are applied.**
-    *   **Important:** You may need to manually set the `is_admin` flag to `true` for your user account in the `profiles` table via the Supabase table editor or an SQL command (`UPDATE public.profiles SET is_admin = true WHERE id = 'your-user-id';`) to test admin features.
-    *   Go to **Project Settings > API**.
-    *   Copy the **Project URL** and the **public anon key**.
-    *   Create a `.env` file in the project root and add your credentials:
-        ```
-        VITE_SUPABASE_URL=YOUR_PROJECT_URL
-        VITE_SUPABASE_ANON_KEY=YOUR_PUBLIC_ANON_KEY
-        ```
-4.  **(Optional) Seed Database:**
-    *   Get your **Service Role Key** from **Project Settings > API**.
-    *   **Temporarily** replace the placeholder key in `scripts/seed.cjs` with your Service Role Key.
-    *   Run the script: `node scripts/seed.cjs`
-    *   **Important:** Remove your Service Role Key from the script file after running it.
-5.  **Run the development server:**
+    *   Create a project on [Supabase](https://supabase.com/)
+    *   Run the SQL migrations from `supabase/migrations/`
+    *   Set up storage buckets for event and club images
+    *   Configure environment variables in `.env`
+
+4.  **Run the development server:**
     ```bash
     npm run dev
     ```
-    The application should be available at `http://localhost:5173` (or the next available port).
 
-## Notes
+## Contributing
 
-*   The application uses Tailwind CSS for styling.
-*   State management is handled by Zustand (`src/stores/authStore.ts`).
-*   Routing is handled by React Router (`src/App.tsx`).
-*   **Row Level Security (RLS)** is enabled on Supabase tables to enforce permissions. Ensure policies are correctly configured as per the migration files.
-*   Deleting clubs requires `ON DELETE CASCADE` on the foreign key in the `events` table (handled in migrations).
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Acknowledgments
+
+*   Presidency University for the inspiration
+*   Supabase for the backend infrastructure
+*   All contributors who have helped shape this project

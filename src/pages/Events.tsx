@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'; // Import useNavigate
 import { Calendar as CalendarIcon, MapPin, Clock, Users, Plus, Check, X, Star, Pencil, Trash2 } from 'lucide-react'; // Renamed Calendar icon import
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/authStore';
+import { useRealtimeStore } from '../stores/realtimeStore';
 import { shallow } from 'zustand/shallow'; // Import shallow
 import { CreateEventModal } from '../components/CreateEventModal';
 import { EditEventModal } from '../components/EditEventModal';
@@ -55,6 +56,7 @@ interface RawEventSelect {
 export function Events() {
   // Use shallow comparison for the user object
   const { user } = useAuthStore(state => ({ user: state.user }), shallow);
+  const { subscribeToEvents, onEventsChange, unsubscribeAll } = useRealtimeStore();
   const [events, setEvents] = useState<Event[]>([]); // Main list of events
   const [suggestedEvents, setSuggestedEvents] = useState<Event[]>([]); // Suggested events
   const [registrations, setRegistrations] = useState<Set<string>>(new Set());
@@ -202,8 +204,24 @@ export function Events() {
   useEffect(() => {
     if (!authLoading) { // Only fetch if auth is not in its initial loading state
         fetchData();
+      
+      // Set up real-time subscription
+      if (subscribeToEvents && onEventsChange) {
+        subscribeToEvents();
+        onEventsChange((payload) => {
+          console.log('Real-time event update:', payload);
+          fetchData();
+        });
+      }
+
+      // Cleanup subscriptions
+      return () => {
+        if (unsubscribeAll) {
+          unsubscribeAll();
+        }
+      };
     }
-  }, [fetchData, authLoading]);
+  }, [fetchData, authLoading, subscribeToEvents, onEventsChange, unsubscribeAll]);
 
   // Add is_registered flag to both lists using useMemo
    const suggestedEventsWithReg = useMemo(() => {

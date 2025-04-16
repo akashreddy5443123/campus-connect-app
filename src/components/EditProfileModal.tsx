@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X } from 'lucide-react';
+import { X, Upload } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/authStore';
 
@@ -15,6 +15,7 @@ export function EditProfileModal({ isOpen, onClose }: EditProfileModalProps) {
   const [dateOfBirth, setDateOfBirth] = useState(user?.date_of_birth || '');
   const [phone, setPhone] = useState(user?.phone || '');
   const [bio, setBio] = useState(user?.bio || '');
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarUrl, setAvatarUrl] = useState(user?.avatar_url || '');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -27,12 +28,44 @@ export function EditProfileModal({ isOpen, onClose }: EditProfileModalProps) {
     if (isOpen) getEmail();
   }, [isOpen]);
 
+  const uploadAvatar = async (file: File): Promise<string> => {
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${user?.id}-${Math.random().toString(36).substring(2)}.${fileExt}`;
+    const filePath = `avatars/${fileName}`;
+
+    try {
+      // Upload the file to Supabase storage
+      const { error: uploadError } = await supabase.storage
+        .from('profiles')
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      // Get the public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('profiles')
+        .getPublicUrl(filePath);
+
+      return publicUrl;
+    } catch (error) {
+      console.error('Error uploading avatar:', error);
+      throw error;
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setLoading(true);
 
     try {
+      let newAvatarUrl = avatarUrl;
+
+      // If there's a new avatar file, upload it
+      if (avatarFile) {
+        newAvatarUrl = await uploadAvatar(avatarFile);
+      }
+
       const { error: updateError } = await supabase
         .from('profiles')
         .update({
@@ -40,7 +73,7 @@ export function EditProfileModal({ isOpen, onClose }: EditProfileModalProps) {
           date_of_birth: dateOfBirth,
           phone,
           bio,
-          avatar_url: avatarUrl,
+          avatar_url: newAvatarUrl,
         })
         .eq('id', user?.id);
 
@@ -138,16 +171,43 @@ export function EditProfileModal({ isOpen, onClose }: EditProfileModalProps) {
           </div>
 
           <div>
-            <label htmlFor="avatarUrl" className="block text-base text-gray-900 mb-2">
-              Avatar URL
+            <label className="block text-base text-gray-900 mb-2">
+              Profile Picture
             </label>
-            <input
-              type="url"
-              id="avatarUrl"
-              value={avatarUrl}
-              onChange={(e) => setAvatarUrl(e.target.value)}
-              className="w-full p-3 bg-white border border-gray-200 rounded-xl shadow-sm"
-            />
+            {/* Display current avatar if exists */}
+            {avatarUrl && !avatarFile && (
+              <div className="mb-4">
+                <img 
+                  src={avatarUrl} 
+                  alt="Current profile picture" 
+                  className="w-20 h-20 rounded-full object-cover border-2 border-gray-200"
+                />
+              </div>
+            )}
+            <div className="mt-1 flex items-center space-x-4">
+              <label 
+                htmlFor="avatar-upload" 
+                className="cursor-pointer inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              >
+                <Upload className="w-4 h-4 mr-2" />
+                Choose Image
+              </label>
+              <input
+                type="file"
+                id="avatar-upload"
+                accept="image/*"
+                onChange={(e) => setAvatarFile(e.target.files ? e.target.files[0] : null)}
+                className="sr-only"
+              />
+              {avatarFile && (
+                <span className="text-sm text-gray-500">
+                  Selected: {avatarFile.name}
+                </span>
+              )}
+            </div>
+            <p className="mt-2 text-sm text-gray-500">
+              Supported formats: JPG, PNG, GIF. Max file size: 5MB
+            </p>
           </div>
 
           <div className="flex justify-end space-x-4 mt-8">
@@ -163,7 +223,7 @@ export function EditProfileModal({ isOpen, onClose }: EditProfileModalProps) {
               disabled={loading}
               className="px-6 py-2.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
             >
-              Save Changes
+              {loading ? 'Saving...' : 'Save Changes'}
             </button>
           </div>
         </form>

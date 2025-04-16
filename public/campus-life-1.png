@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="400" height="400" viewBox="0 0 400 400" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Campus Building -->
+  <path d="M200 50L350 150V350H50V150L200 50Z" fill="white"/>
+  <!-- Windows -->
+  <rect x="100" y="200" width="40" height="40" fill="white"/>
+  <rect x="180" y="200" width="40" height="40" fill="white"/>
+  <rect x="260" y="200" width="40" height="40" fill="white"/>
+  <!-- Door -->
+  <rect x="180" y="290" width="40" height="60" fill="white"/>
+  <!-- Students -->
+  <circle cx="150" y="320" r="15" fill="white"/>
+  <circle cx="250" y="320" r="15" fill="white"/>
+  <!-- Books -->
+  <rect x="130" y="280" width="20" height="25" fill="white"/>
+  <rect x="250" y="280" width="20" height="25" fill="white"/>
+</svg> 

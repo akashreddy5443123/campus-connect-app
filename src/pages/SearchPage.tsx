@@ -98,32 +98,32 @@ export function SearchPage() {
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <h1 className="text-3xl font-bold text-gray-900 mb-8">
-        Search Results for: <span className="text-indigo-600">"{query}"</span>
+      <h1 className="text-3xl font-bold text-white mb-8">
+        Search Results for: <span className="text-white">"{query}"</span>
       </h1>
 
-      {loading && <p className="text-gray-500">Searching...</p>}
-      {error && <p className="text-red-600">Error: {error}</p>}
+      {loading && <p className="text-white/70">Searching...</p>}
+      {error && <p className="text-red-200">Error: {error}</p>}
 
       {!loading && !error && (
         (events.length === 0 && clubs.length === 0 && announcements.length === 0) ? (
-          <p className="text-gray-500">No results found.</p>
+          <p className="text-white/70">No results found.</p>
         ) : (
           <div className="space-y-10">
             {/* Event Results */}
             {events.length > 0 && (
               <section>
-                <h2 className="text-2xl font-semibold text-gray-800 mb-4 flex items-center">
-                  <Calendar className="w-6 h-6 mr-2 text-indigo-600"/> Events
+                <h2 className="text-2xl font-semibold text-white mb-4 flex items-center">
+                  <Calendar className="w-6 h-6 mr-2 text-white"/> Events
                 </h2>
                 <ul className="space-y-4">
                   {events.map(event => (
-                    <li key={event.id} className="bg-white/90 p-4 rounded-lg shadow-md backdrop-blur-sm">
-                      <Link to={`/events/${event.id}`} className="hover:text-indigo-700">
-                        <h3 className="font-medium text-lg text-indigo-600">{event.title}</h3>
+                    <li key={event.id} className="bg-white/10 backdrop-blur-sm p-4 rounded-lg">
+                      <Link to={`/events/${event.id}`} className="hover:text-white/80">
+                        <h3 className="font-medium text-lg text-white">{event.title}</h3>
                       </Link>
-                      <p className="text-sm text-gray-500 mt-1">{new Date(event.date).toLocaleDateString()}</p>
-                      <p className="text-gray-700 mt-2 text-sm line-clamp-2">{event.description}</p>
+                      <p className="text-sm text-white/70 mt-1">{new Date(event.date).toLocaleDateString()}</p>
+                      <p className="text-white/80 mt-2 text-sm line-clamp-2">{event.description}</p>
                     </li>
                   ))}
                 </ul>
@@ -133,36 +133,36 @@ export function SearchPage() {
             {/* Club Results */}
             {clubs.length > 0 && (
               <section>
-                <h2 className="text-2xl font-semibold text-gray-800 mb-4 flex items-center">
-                   <Users className="w-6 h-6 mr-2 text-indigo-600"/> Clubs
+                <h2 className="text-2xl font-semibold text-white mb-4 flex items-center">
+                   <Users className="w-6 h-6 mr-2 text-white"/> Clubs
                 </h2>
-                 <ul className="space-y-4">
+                <ul className="space-y-4">
                   {clubs.map(club => (
-                    <li key={club.id} className="bg-white/90 p-4 rounded-lg shadow-md backdrop-blur-sm">
-                       <Link to={`/clubs`} className="hover:text-indigo-700"> {/* Link to general clubs page for now */}
-                        <h3 className="font-medium text-lg text-indigo-600">{club.name}</h3>
+                    <li key={club.id} className="bg-white/10 backdrop-blur-sm p-4 rounded-lg">
+                      <Link to={`/clubs/${club.id}`} className="hover:text-white/80">
+                        <h3 className="font-medium text-lg text-white">{club.name}</h3>
                       </Link>
-                      <p className="text-gray-700 mt-2 text-sm line-clamp-2">{club.description}</p>
+                      <p className="text-white/80 mt-2 text-sm line-clamp-2">{club.description}</p>
                     </li>
                   ))}
                 </ul>
               </section>
             )}
 
-             {/* Announcement Results */}
+            {/* Announcement Results */}
             {announcements.length > 0 && (
               <section>
-                <h2 className="text-2xl font-semibold text-gray-800 mb-4 flex items-center">
-                   <Bell className="w-6 h-6 mr-2 text-indigo-600"/> Announcements
+                <h2 className="text-2xl font-semibold text-white mb-4 flex items-center">
+                   <Bell className="w-6 h-6 mr-2 text-white"/> Announcements
                 </h2>
-                 <ul className="space-y-4">
+                <ul className="space-y-4">
                   {announcements.map(announcement => (
-                    <li key={announcement.id} className="bg-white/90 p-4 rounded-lg shadow-md backdrop-blur-sm">
-                       <Link to={`/announcements`} className="hover:text-indigo-700"> {/* Link to general announcements page */}
-                         <h3 className="font-medium text-lg text-indigo-600">{announcement.title}</h3>
-                       </Link>
-                       <p className="text-sm text-gray-500 mt-1">{new Date(announcement.created_at).toLocaleString()}</p>
-                       <p className="text-gray-700 mt-2 text-sm line-clamp-3">{announcement.message}</p> {/* Display message */}
+                    <li key={announcement.id} className="bg-white/10 backdrop-blur-sm p-4 rounded-lg">
+                      <Link to="/announcements" className="hover:text-white/80">
+                        <h3 className="font-medium text-lg text-white">{announcement.title}</h3>
+                      </Link>
+                      <p className="text-sm text-white/70 mt-1">{new Date(announcement.created_at).toLocaleString()}</p>
+                      <p className="text-white/80 mt-2 text-sm line-clamp-3">{announcement.message}</p>
                     </li>
                   ))}
                 </ul>

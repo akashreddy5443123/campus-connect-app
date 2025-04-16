@@ -1,199 +1,189 @@
-import { useState, useEffect } from 'react'; // Removed React import
-import { supabase } from '../lib/supabase';
-import { useAuthStore } from '../stores/authStore'; // Import auth store
-import { Bell, Plus, Pencil, Trash2, Clock, ThumbsUp, MessageSquare } from 'lucide-react'; // Import necessary icons
-import { CreateAnnouncementModal } from '../components/CreateAnnouncementModal'; // Import the create modal
-import { EditAnnouncementModal } from '../components/EditAnnouncementModal'; // Import the edit modal
+import { useEffect, useState } from 'react'
+import { supabase } from '../lib/supabase'
+import { Database } from '../types/supabase'
+import { Button } from '../components/ui/button'
+import { useAuthStore } from '../stores/authStore'
+import { toast } from 'sonner'
+import { Loader2, Plus } from 'lucide-react'
+import { CreateAnnouncementModal } from '../components/CreateAnnouncementModal'
+import { EditAnnouncementModal } from '../components/EditAnnouncementModal'
+import { RealtimePostgresChangesPayload } from '@supabase/supabase-js'
 
-interface Announcement {
+type Announcement = Database['public']['Tables']['announcements']['Row']
+
+// Define the payload types more precisely
+type AnnouncementChanges = RealtimePostgresChangesPayload<{
   id: string;
   title: string;
-  message: string; // Changed content to message
+  message: string;
   created_at: string;
-  created_by?: string; // Add creator ID
-  priority?: boolean; // Add priority field
-}
+  created_by?: string;
+  priority?: boolean;
+}>
 
-export function Announcements() {
-  const { user } = useAuthStore(); // Get user info for permissions
-  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false); // State for create modal
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false); // State for edit modal
-  const [editingAnnouncement, setEditingAnnouncement] = useState<Announcement | null>(null); // State for announcement being edited
-  // TODO: Add loading state for delete/edit actions if needed
+export default function Announcements() {
+  const [announcements, setAnnouncements] = useState<Announcement[]>([])
+  const [loading, setLoading] = useState(true)
+  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [showEditModal, setShowEditModal] = useState(false)
+  const [selectedAnnouncement, setSelectedAnnouncement] = useState<Announcement | null>(null)
+  const { user } = useAuthStore()
+  const isAdmin = user?.is_admin || false
 
-  // Define fetchData function inside component but outside useEffect
-  async function fetchData() {
-    setLoading(true);
-    setError(null);
+  const fetchData = async () => {
     try {
-      const { data, error: fetchError } = await supabase
+      const { data, error } = await supabase
         .from('announcements')
-        .select('*, created_by') // Fetch created_by
-        .order('created_at', { ascending: false }); // Get latest first
+        .select('*')
+        .order('created_at', { ascending: false })
 
-      if (fetchError) throw fetchError;
-      setAnnouncements(data || []);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load announcements');
-      setAnnouncements([]);
+      if (error) {
+        throw error
+      }
+
+      setAnnouncements(data || [])
+    } catch (error) {
+      console.error('Error fetching announcements:', error)
+      toast.error('Failed to load announcements')
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
   }
 
-  // Fetch data on mount
-  useEffect(() => {
-    fetchData();
-  }, []); // Empty dependency array, fetchData is defined outside
+  const subscribeToAnnouncements = () => {
+    const subscription = supabase
+      .channel('announcements-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'announcements'
+        },
+        (payload: AnnouncementChanges) => {
+          if (payload.eventType === 'INSERT') {
+            setAnnouncements(prev => [payload.new as Announcement, ...prev])
+          } else if (payload.eventType === 'DELETE') {
+            setAnnouncements(prev => prev.filter(ann => ann.id !== payload.old.id))
+          } else if (payload.eventType === 'UPDATE') {
+            setAnnouncements(prev => 
+              prev.map(ann => ann.id === payload.new.id ? payload.new as Announcement : ann)
+            )
+          }
+        }
+      )
+      .subscribe()
 
-  // Handle Delete Announcement
-  const handleDeleteAnnouncement = async (announcementId: string) => {
-    if (!user) return; // Should not happen if button is shown correctly
-
-    if (!window.confirm("Are you sure you want to delete this announcement?")) {
-      return;
+    return () => {
+      subscription.unsubscribe()
     }
+  }
 
-    // TODO: Set loading state specifically for this announcement?
+  useEffect(() => {
+    fetchData()
+    const unsubscribe = subscribeToAnnouncements()
+    return () => {
+      unsubscribe()
+    }
+  }, [])
+
+  const handleEdit = (announcement: Announcement) => {
+    setSelectedAnnouncement(announcement)
+    setShowEditModal(true)
+  }
+
+  const handleDelete = async (id: string) => {
     try {
-      // RLS policy handles permission check (creator or admin)
-      const { error: deleteError } = await supabase
+      const { error } = await supabase
         .from('announcements')
         .delete()
-        .eq('id', announcementId);
+        .eq('id', id)
 
-      if (deleteError) {
-        console.error("Supabase delete announcement error:", deleteError);
-        throw new Error(`Failed to delete announcement: ${deleteError.message}`);
-      }
+      if (error) throw error
 
-      console.log("Announcement deleted successfully, refetching data...");
-      await fetchData(); // Refetch data
-
-    } catch (err) {
-      console.error("Error deleting announcement:", err);
-      alert(err instanceof Error ? err.message : 'Failed to delete announcement');
-    } finally {
-      // TODO: Reset loading state
+      toast.success('Announcement deleted successfully')
+    } catch (error) {
+      console.error('Error deleting announcement:', error)
+      toast.error('Failed to delete announcement')
     }
-  };
+  }
 
-  // Function to open the create modal
-  const openCreateModal = () => {
-    setIsCreateModalOpen(true);
-  };
-
-  // Function to open the edit modal
-  const openEditModal = (announcement: Announcement) => {
-    setEditingAnnouncement(announcement); // Set the announcement to edit
-    setIsEditModalOpen(true); // Open the modal
-  };
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    )
+  }
 
   return (
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <div className="flex justify-between items-center mb-8"> {/* Container for title and button */}
-        <h1 className="text-3xl font-bold text-gray-900 flex items-center">
-          <Bell className="w-8 h-8 mr-3 text-indigo-600"/>
-          All Announcements
-        </h1>
-        {/* Create Button - Show only to admin */}
-        {user?.is_admin && (
-          <button
-            onClick={openCreateModal} // Open the modal
-            className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
-          >
-            <Plus className="w-5 h-5 mr-2" />
-            Create Announcement
-          </button>
+    <div className="container mx-auto px-4 py-8">
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-2xl font-bold">Announcements</h1>
+        {isAdmin && (
+          <Button onClick={() => setShowCreateModal(true)}>
+            <Plus className="h-4 w-4 mr-2" />
+            New Announcement
+          </Button>
         )}
       </div>
 
-      {loading && <p className="text-gray-500">Loading announcements...</p>}
-      {error && <p className="text-red-600">Error: {error}</p>}
-
-      {!loading && !error && (
-        announcements.length > 0 ? (
-          <div className="space-y-6">
-            {announcements.map((announcement) => (
-              <div key={announcement.id} className="bg-white/90 p-6 rounded-lg shadow-md backdrop-blur-sm hover:shadow-lg transition-shadow duration-300">
-                <div className="flex justify-between items-start mb-2">
-                  <div className="flex items-center space-x-2">
-                    <Bell className="w-5 h-5 text-indigo-600" />
-                    <h2 className="text-xl font-semibold text-indigo-700">{announcement.title}</h2>
-                  </div>
-                  {/* Priority indicator */}
-                  {announcement.priority && (
-                    <span className="bg-red-100 text-red-800 text-xs font-medium px-2.5 py-0.5 rounded">
-                      Important
-                    </span>
-                  )}
-                  {/* Edit/Delete Buttons - Show to creator or admin */}
-                  {(user?.id === announcement.created_by || user?.is_admin) && (
-                    <div className="flex space-x-2 absolute top-4 right-4">
-                       <button
-                         onClick={() => openEditModal(announcement)} // Open edit modal on click
-                         title="Edit Announcement"
-                         className="p-1 rounded text-gray-500 hover:bg-gray-200"
-                       >
-                         <Pencil className="w-4 h-4" />
-                       </button>
-                       <button
-                         onClick={() => handleDeleteAnnouncement(announcement.id)}
-                         title="Delete Announcement"
-                         className="p-1 rounded text-red-500 hover:bg-red-100"
-                       >
-                         <Trash2 className="w-4 h-4" />
-                       </button>
-                    </div>
-                  )}
-                </div>
-                <p className="text-sm text-gray-500 mb-3 flex items-center">
-                  <Clock className="w-4 h-4 mr-1" />
-                  {new Date(announcement.created_at).toLocaleString()}
+      <div className="space-y-4">
+        {announcements.map((announcement) => (
+          <div
+            key={announcement.id}
+            className={`p-4 rounded-lg shadow ${
+              announcement.priority ? 'bg-red-50 border border-red-200' : 'bg-white'
+            }`}
+          >
+            <div className="flex justify-between items-start">
+              <div>
+                <h3 className="text-lg font-semibold">{announcement.title}</h3>
+                <p className="text-gray-600 mt-2">{announcement.message}</p>
+                <p className="text-sm text-gray-500 mt-2">
+                  Posted on {new Date(announcement.created_at).toLocaleDateString()}
                 </p>
-                <p className="text-gray-800 whitespace-pre-wrap">{announcement.message}</p>
-                
-                {/* Engagement metrics */}
-                <div className="mt-4 flex items-center space-x-4 text-sm text-gray-600">
-                  <button className="flex items-center space-x-1 hover:text-indigo-600">
-                    <ThumbsUp className="w-4 h-4" />
-                    <span>Helpful</span>
-                  </button>
-                  <button className="flex items-center space-x-1 hover:text-indigo-600">
-                    <MessageSquare className="w-4 h-4" />
-                    <span>Comment</span>
-                  </button>
-                </div>
               </div>
-            ))}
+              {isAdmin && (
+                <div className="flex space-x-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleEdit(announcement)}
+                  >
+                    Edit
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => handleDelete(announcement.id)}
+                  >
+                    Delete
+                  </Button>
+                </div>
+              )}
+            </div>
           </div>
-        ) : (
-          <p className="text-gray-500">No announcements available.</p>
-        )
+        ))}
+      </div>
+
+      {showCreateModal && (
+        <CreateAnnouncementModal
+          isOpen={showCreateModal}
+          onClose={() => setShowCreateModal(false)}
+        />
       )}
 
-      {/* Render the Create Modal */}
-      <CreateAnnouncementModal
-        isOpen={isCreateModalOpen}
-        onClose={() => {
-          setIsCreateModalOpen(false);
-          fetchData(); // Refetch data after create modal closes
-        }}
-      />
-
-      {/* Render the Edit Modal */}
-      <EditAnnouncementModal
-        isOpen={isEditModalOpen}
-        announcement={editingAnnouncement}
-        onClose={() => {
-          setIsEditModalOpen(false);
-          setEditingAnnouncement(null); // Clear selected announcement
-          fetchData(); // Refetch data after edit modal closes
-        }}
-      />
+      {showEditModal && selectedAnnouncement && (
+        <EditAnnouncementModal
+          isOpen={showEditModal}
+          onClose={() => {
+            setShowEditModal(false)
+            setSelectedAnnouncement(null)
+          }}
+          announcement={selectedAnnouncement}
+        />
+      )}
     </div>
-  );
+  )
 }

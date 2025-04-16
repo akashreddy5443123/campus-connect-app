@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="400" height="400" viewBox="0 0 400 400" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Group of Students -->
+  <circle cx="200" cy="150" r="30" fill="white"/>
+  <circle cx="150" cy="180" r="25" fill="white"/>
+  <circle cx="250" cy="180" r="25" fill="white"/>
+  <!-- Activity Icons -->
+  <rect x="120" y="250" width="50" height="50" rx="10" fill="white"/>
+  <rect x="190" y="250" width="50" height="50" rx="10" fill="white"/>
+  <rect x="260" y="250" width="50" height="50" rx="10" fill="white"/>
+  <!-- Connecting Lines -->
+  <path d="M145 275L215 275M215 275L285 275" stroke="white" stroke-width="4"/>
+  <!-- Stars/Sparkles -->
+  <path d="M150 100L160 90L170 100L160 110Z" fill="white"/>
+  <path d="M250 120L260 110L270 120L260 130Z" fill="white"/>
+  <path d="M200 80L210 70L220 80L210 90Z" fill="white"/>
+</svg> 

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Mail, Globe, MapPin, Calendar, Plus, Check, X, Pencil, Trash2, Clock } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/authStore';
+import { useRealtimeStore } from '../stores/realtimeStore';
 import { shallow } from 'zustand/shallow';
 import { CreateClubModal } from '../components/CreateClubModal';
 import { EditClubModal } from '../components/EditClubModal';
@@ -23,6 +24,7 @@ interface Club {
 
 export function Clubs() {
   const { user } = useAuthStore(state => ({ user: state.user }), shallow);
+  const { subscribeToClubs, onClubsChange, unsubscribeAll } = useRealtimeStore();
   const [clubs, setClubs] = useState<Club[]>([]);
   const [memberships, setMemberships] = useState<Set<string>>(new Set());
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -69,8 +71,23 @@ export function Clubs() {
 
   useEffect(() => {
     fetchData();
-  // Include fetchData in the dependency array
-  }, [fetchData]); // Depend only on the memoized fetchData
+
+    // Set up real-time subscription
+    if (subscribeToClubs && onClubsChange) {
+      subscribeToClubs();
+      onClubsChange((payload) => {
+        console.log('Real-time club update:', payload);
+        fetchData();
+      });
+    }
+
+    // Cleanup subscriptions
+    return () => {
+      if (unsubscribeAll) {
+        unsubscribeAll();
+      }
+    };
+  }, [fetchData, subscribeToClubs, onClubsChange, unsubscribeAll]);
 
   const clubsWithMembership = useMemo(() => {
     return clubs.map(club => ({
