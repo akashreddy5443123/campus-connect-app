@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'; // Import useState, useEffect
 import { Routes, Route, Link, useNavigate } from 'react-router-dom'; // Import useNavigate
-import { Calendar, Users, Search, Bell, ChevronRight } from 'lucide-react';
+import { Calendar, Users, Search, Bell, ChevronRight, GraduationCap, Trophy, Palette, Laptop } from 'lucide-react';
 import { Header } from './components/Header';
 import { Footer } from './components/Footer'; // Import Footer
 import { supabase } from './lib/supabase';
@@ -15,6 +15,7 @@ import { EventDetailPage } from './pages/EventDetailPage';
 import { ClubDetailPage } from './pages/ClubDetailPage';
 import { AdminDashboard } from './pages/AdminDashboard'; // Import AdminDashboard
 import { ProtectedRoute } from './components/ProtectedRoute'; // Import ProtectedRoute
+import { cn } from './lib/utils';
 
 // Define Announcement type
 interface Announcement {
@@ -284,114 +285,120 @@ function App() {
 
               {/* Quick Links Section */}
               <section className="py-16 px-4 bg-[#1a1a2e]">
-                <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-8">
-                  <Link
-                    to="/events"
-                    className="group rounded-xl text-white hover:scale-[1.02] transition-all duration-300 shadow-xl hover:shadow-blue-500/25 overflow-hidden"
-                  >
-                    {/* Calendar Design */}
-                    <div className="bg-gradient-to-br from-[#2563eb] to-[#1d4ed8] p-6">
-                      {/* Calendar Header */}
-                      <div className="bg-white/10 backdrop-blur-sm rounded-t-lg p-4 text-center border-b border-white/20">
-                        <h2 className="text-2xl font-bold">Events Calendar</h2>
+                <div className="max-w-7xl mx-auto">
+                  <h2 className="text-3xl font-bold text-white mb-8 font-poppins">Quick Links</h2>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+                    {/* Events Calendar Card */}
+                    <Link
+                      to="/events"
+                      className="group bg-gradient-to-br from-blue-600 to-blue-700 rounded-2xl p-6 transition-all duration-300 hover:shadow-xl hover:shadow-blue-500/20 hover:-translate-y-1"
+                    >
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-xl font-semibold text-white">Events Calendar</h3>
+                        <Calendar className="w-8 h-8 text-blue-200" />
                       </div>
-                      
-                      {/* Calendar Body */}
-                      <div className="bg-white/5 backdrop-blur-sm rounded-b-lg p-4">
-                        {/* Calendar Grid */}
-                        <div className="grid grid-cols-7 gap-1 mb-4">
-                          {/* Weekday Headers */}
-                          {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day) => (
-                            <div key={day} className="text-center text-xs font-medium text-blue-200 py-1">
-                              {day}
-                            </div>
+                      <div className="bg-white/10 rounded-xl p-4 mb-4">
+                        <div className="grid grid-cols-7 gap-2 text-center mb-2">
+                          <span className="text-blue-200 text-xs">S</span>
+                          <span className="text-blue-200 text-xs">M</span>
+                          <span className="text-blue-200 text-xs">T</span>
+                          <span className="text-blue-200 text-xs">W</span>
+                          <span className="text-blue-200 text-xs">T</span>
+                          <span className="text-blue-200 text-xs">F</span>
+                          <span className="text-blue-200 text-xs">S</span>
+                        </div>
+                        <div className="grid grid-cols-7 gap-2 text-center">
+                          {Array.from({ length: 31 }, (_, i) => (
+                            <span
+                              key={i}
+                              className={cn(
+                                "text-sm py-1 rounded-lg",
+                                i + 1 === new Date().getDate()
+                                  ? "bg-white text-blue-600 font-medium"
+                                  : "text-blue-100"
+                              )}
+                            >
+                              {i + 1}
+                            </span>
                           ))}
-                          
-                          {/* Calendar Days */}
-                          {[...Array(31)].map((_, i) => {
-                            const day = i + 1;
-                            const status = getDateStatus(day);
-                            return (
-                              <div 
-                                key={i} 
-                                className={`text-center text-sm py-2 rounded transition-colors ${
-                                  status === 'upcoming' 
-                                    ? 'bg-blue-500/30 text-white font-medium' 
-                                    : status === 'past'
-                                    ? 'bg-green-500/30 text-white font-medium'
-                                    : day === new Date().getDate()
-                                    ? 'bg-white/20 font-bold'
-                                    : 'text-white/70'
-                                }`}
-                              >
-                                {day}
-                                {(status === 'upcoming' || status === 'past') && (
-                                  <div className="w-1 h-1 rounded-full mx-auto mt-1 bg-current opacity-70" />
-                                )}
-                              </div>
-                            );
-                          })}
                         </div>
+                      </div>
+                      <p className="text-blue-100 mb-4">Discover exciting happenings around campus</p>
+                      <div className="flex items-center text-blue-100 group-hover:text-white transition-colors">
+                        Check it out <ChevronRight className="w-5 h-5 ml-2 transition-transform group-hover:translate-x-1" />
+                      </div>
+                    </Link>
 
-                        {/* Legend */}
-                        <div className="flex items-center justify-center gap-4 mb-4 text-xs">
-                          <div className="flex items-center gap-1">
-                            <div className="w-3 h-3 rounded bg-blue-500/30" />
-                            <span>Upcoming</span>
+                    {/* Clubs Directory Card */}
+                    <Link
+                      to="/clubs"
+                      className="group bg-gradient-to-br from-purple-600 to-purple-700 rounded-2xl p-6 transition-all duration-300 hover:shadow-xl hover:shadow-purple-500/20 hover:-translate-y-1"
+                    >
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-xl font-semibold text-white">Clubs Directory</h3>
+                        <Users className="w-8 h-8 text-purple-200" />
+                      </div>
+                      <div className="grid grid-cols-2 gap-3 mb-4">
+                        <div className="bg-white/10 rounded-xl p-3 backdrop-blur-sm">
+                          <GraduationCap className="w-6 h-6 text-purple-200 mb-2" />
+                          <span className="text-sm text-purple-100">Academic</span>
+                        </div>
+                        <div className="bg-white/10 rounded-xl p-3 backdrop-blur-sm">
+                          <Trophy className="w-6 h-6 text-purple-200 mb-2" />
+                          <span className="text-sm text-purple-100">Sports</span>
+                        </div>
+                        <div className="bg-white/10 rounded-xl p-3 backdrop-blur-sm">
+                          <Palette className="w-6 h-6 text-purple-200 mb-2" />
+                          <span className="text-sm text-purple-100">Arts</span>
+                        </div>
+                        <div className="bg-white/10 rounded-xl p-3 backdrop-blur-sm">
+                          <Laptop className="w-6 h-6 text-purple-200 mb-2" />
+                          <span className="text-sm text-purple-100">Tech</span>
+                        </div>
+                      </div>
+                      <p className="text-purple-100 mb-4">Find your tribe and unlock your potential</p>
+                      <div className="flex items-center text-purple-100 group-hover:text-white transition-colors">
+                        Browse clubs <ChevronRight className="w-5 h-5 ml-2 transition-transform group-hover:translate-x-1" />
+                      </div>
+                    </Link>
+
+                    {/* Announcements Card */}
+                    <Link
+                      to="/announcements"
+                      className="group bg-gradient-to-br from-red-500 to-red-600 rounded-2xl p-6 transition-all duration-300 hover:shadow-xl hover:shadow-red-500/20 hover:-translate-y-1"
+                    >
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-xl font-semibold text-white">Announcements</h3>
+                        <Bell className="w-8 h-8 text-red-200" />
+                      </div>
+                      <div className="space-y-3 mb-4">
+                        <div className="bg-white/10 rounded-xl p-3 backdrop-blur-sm">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-xs text-red-200">Latest Updates</span>
+                            <span className="text-xs text-red-200">Today</span>
                           </div>
-                          <div className="flex items-center gap-1">
-                            <div className="w-3 h-3 rounded bg-green-500/30" />
-                            <span>Past</span>
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <div className="w-3 h-3 rounded bg-white/20" />
-                            <span>Today</span>
+                          <div className="flex items-start space-x-3">
+                            <div className="w-2 h-2 rounded-full bg-red-200 mt-1.5" />
+                            <p className="text-sm text-red-100 line-clamp-2">Stay updated with the latest campus news and important announcements</p>
                           </div>
                         </div>
-
-                        {/* Description */}
-                        <p className="text-blue-100 mb-4">Discover exciting happenings around campus</p>
-                        
-                        {/* Action Button */}
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm font-medium flex items-center group-hover:text-white transition-colors">
-                            Check it out <ChevronRight className="h-4 w-4 ml-1 group-hover:translate-x-1 transition-transform" />
-                          </span>
-                          <div className="bg-white/10 rounded-full p-2 group-hover:bg-white/20 transition-colors">
-                            <Calendar className="h-5 w-5" />
+                        <div className="bg-white/10 rounded-xl p-3 backdrop-blur-sm">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-xs text-red-200">Categories</span>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            <span className="text-xs text-red-100 bg-white/10 px-2 py-1 rounded-lg">Academic</span>
+                            <span className="text-xs text-red-100 bg-white/10 px-2 py-1 rounded-lg">Events</span>
+                            <span className="text-xs text-red-100 bg-white/10 px-2 py-1 rounded-lg">Campus</span>
                           </div>
                         </div>
                       </div>
-                    </div>
-                  </Link>
-
-                  <Link
-                    to="/clubs"
-                    className="group bg-gradient-to-br from-[#533483] to-[#4c2885] rounded-xl p-8 text-white hover:scale-[1.02] transition-all duration-300 shadow-xl hover:shadow-purple-500/25"
-                  >
-                    <div className="bg-white/10 rounded-full w-16 h-16 flex items-center justify-center mb-6 group-hover:bg-white/20 transition-colors">
-                      <Users className="h-8 w-8" />
-                    </div>
-                    <h2 className="text-2xl font-bold mb-4">Clubs Directory</h2>
-                    <p className="text-purple-100 mb-6">Find your tribe and unlock your potential</p>
-                    <div className="text-sm font-medium flex items-center">
-                      Browse clubs <ChevronRight className="h-4 w-4 ml-1 group-hover:translate-x-1 transition-transform" />
-                    </div>
-                  </Link>
-
-                  <Link
-                    to="/announcements"
-                    className="group bg-gradient-to-br from-[#E94560] to-[#c81d4c] rounded-xl p-8 text-white hover:scale-[1.02] transition-all duration-300 shadow-xl hover:shadow-pink-500/25"
-                  >
-                    <div className="bg-white/10 rounded-full w-16 h-16 flex items-center justify-center mb-6 group-hover:bg-white/20 transition-colors">
-                      <Bell className="h-8 w-8" />
-                    </div>
-                    <h2 className="text-2xl font-bold mb-4">Announcements</h2>
-                    <p className="text-pink-100 mb-6">Stay in the loop with the latest updates</p>
-                    <div className="text-sm font-medium flex items-center">
-                      Stay updated <ChevronRight className="h-4 w-4 ml-1 group-hover:translate-x-1 transition-transform" />
-                    </div>
-                  </Link>
+                      <p className="text-red-100 mb-4">Stay in the loop with the latest updates</p>
+                      <div className="flex items-center text-red-100 group-hover:text-white transition-colors">
+                        Stay updated <ChevronRight className="w-5 h-5 ml-2 transition-transform group-hover:translate-x-1" />
+                      </div>
+                    </Link>
+                  </div>
                 </div>
               </section>
 

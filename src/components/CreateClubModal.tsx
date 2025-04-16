@@ -1,13 +1,25 @@
 import React, { useState } from 'react';
-import { X, Upload } from 'lucide-react';
+import { X, Upload, ChevronDown } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { useAuthStore } from '../stores/authStore';
+import { cn } from '../lib/utils';
 
 interface CreateClubModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onClubCreated: () => Promise<void>;
 }
 
-export function CreateClubModal({ isOpen, onClose }: CreateClubModalProps) {
+const CATEGORIES = [
+  { id: 'Academic', label: 'Academic' },
+  { id: 'Sports', label: 'Sports' },
+  { id: 'Arts', label: 'Arts & Culture' },
+  { id: 'Technology', label: 'Technology' },
+  { id: 'Social', label: 'Social' }
+];
+
+export function CreateClubModal({ isOpen, onClose, onClubCreated }: CreateClubModalProps) {
+  const { user } = useAuthStore();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState('');
@@ -16,8 +28,10 @@ export function CreateClubModal({ isOpen, onClose }: CreateClubModalProps) {
   const [email, setEmail] = useState('');
   const [website, setWebsite] = useState('');
   const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imageUrl, setImageUrl] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
@@ -29,13 +43,17 @@ export function CreateClubModal({ isOpen, onClose }: CreateClubModalProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null);
+    if (!user) return;
+
+    if (!name.trim() || !description.trim() || !category) {
+      setError('Please fill in all required fields (name, description, and category)');
+      return;
+    }
+
     setLoading(true);
+    setError(null);
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Please sign in to create a club');
-
       let uploadedImageUrl: string | null = null;
 
       // Handle image upload if a file is selected
@@ -63,24 +81,36 @@ export function CreateClubModal({ isOpen, onClose }: CreateClubModalProps) {
         }
       }
 
-      const { error: insertError } = await supabase
-        .from('clubs')
-        .insert([{
-          name,
-          description,
-          category,
-          meeting_time: meetingTime,
-          location,
-          email,
-          website,
-          image_url: uploadedImageUrl,
-          created_by: user.id
-        }]);
+      const { error: insertError } = await supabase.from('clubs').insert({
+        name: name.trim(),
+        description: description.trim(),
+        category,
+        meeting_time: meetingTime.trim(),
+        location: location.trim(),
+        email: email.trim(),
+        website: website.trim(),
+        image_url: uploadedImageUrl || imageUrl.trim(),
+        created_by: user.id
+      });
 
       if (insertError) throw insertError;
+
+      // Reset form
+      setName('');
+      setDescription('');
+      setCategory('');
+      setMeetingTime('');
+      setLocation('');
+      setEmail('');
+      setWebsite('');
+      setImageFile(null);
+      setImageUrl('');
+      
       onClose();
+      await onClubCreated();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
+      console.error('Error creating club:', err);
+      setError(err instanceof Error ? err.message : 'Failed to create club');
     } finally {
       setLoading(false);
     }
@@ -89,11 +119,11 @@ export function CreateClubModal({ isOpen, onClose }: CreateClubModalProps) {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-8 max-w-2xl w-full relative">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl p-8 max-w-2xl w-full relative">
         <button
           onClick={onClose}
-          className="absolute right-4 top-4 text-gray-500 hover:text-gray-700"
+          className="absolute right-4 top-4 text-gray-500 hover:text-gray-700 transition-colors"
         >
           <X className="h-6 w-6" />
         </button>
@@ -101,71 +131,106 @@ export function CreateClubModal({ isOpen, onClose }: CreateClubModalProps) {
         <h2 className="text-2xl font-bold mb-6">Create New Club</h2>
 
         {error && (
-          <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-md text-sm">
+          <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-xl text-sm">
             {error}
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label htmlFor="name" className="block text-sm font-medium text-gray-700">
-                Club Name
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Club Name */}
+            <div className="col-span-2">
+              <label htmlFor="club-name" className="block text-sm font-medium text-gray-700 mb-1">
+                Club Name *
               </label>
               <input
                 type="text"
-                id="name"
+                id="club-name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2 border"
+                className="w-full rounded-xl border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500"
                 required
               />
             </div>
 
-            <div>
-              <label htmlFor="category" className="block text-sm font-medium text-gray-700">
-                Category
+            {/* Category Dropdown */}
+            <div className="relative">
+              <label htmlFor="category" className="block text-sm font-medium text-gray-700 mb-1">
+                Category *
               </label>
-              <input
-                type="text"
-                id="category"
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2 border"
-                required
-              />
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                  className={cn(
+                    "w-full rounded-xl border border-gray-300 px-4 py-2 text-left text-sm",
+                    "focus:outline-none focus:ring-2 focus:ring-purple-500",
+                    "flex items-center justify-between",
+                    !category && "text-gray-500"
+                  )}
+                >
+                  {category || 'Select a category'}
+                  <ChevronDown className="h-4 w-4 text-gray-400" />
+                </button>
+                
+                {isDropdownOpen && (
+                  <div className="absolute z-10 mt-1 w-full rounded-xl bg-white shadow-lg border border-gray-200">
+                    <div className="py-1">
+                      {CATEGORIES.map((cat) => (
+                        <button
+                          key={cat.id}
+                          type="button"
+                          onClick={() => {
+                            setCategory(cat.id);
+                            setIsDropdownOpen(false);
+                          }}
+                          className={cn(
+                            "w-full px-4 py-2 text-sm text-left hover:bg-purple-50",
+                            category === cat.id ? "bg-purple-50 text-purple-700" : "text-gray-700"
+                          )}
+                        >
+                          {cat.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
 
-            <div className="md:col-span-2">
-              <label htmlFor="description" className="block text-sm font-medium text-gray-700">
-                Description
-              </label>
-              <textarea
-                id="description"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                rows={3}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2 border"
-                required
-              />
-            </div>
-
+            {/* Meeting Time */}
             <div>
-              <label htmlFor="meetingTime" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="meeting-time" className="block text-sm font-medium text-gray-700 mb-1">
                 Meeting Time
               </label>
               <input
                 type="text"
-                id="meetingTime"
+                id="meeting-time"
                 value={meetingTime}
                 onChange={(e) => setMeetingTime(e.target.value)}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2 border"
+                className="w-full rounded-xl border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500"
+                placeholder="e.g., Every Monday at 5 PM"
+              />
+            </div>
+
+            {/* Description */}
+            <div className="col-span-2">
+              <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-1">
+                Description *
+              </label>
+              <textarea
+                id="description"
+                rows={4}
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                className="w-full rounded-xl border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500"
                 required
               />
             </div>
 
+            {/* Location */}
             <div>
-              <label htmlFor="location" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="location" className="block text-sm font-medium text-gray-700 mb-1">
                 Location
               </label>
               <input
@@ -173,13 +238,14 @@ export function CreateClubModal({ isOpen, onClose }: CreateClubModalProps) {
                 id="location"
                 value={location}
                 onChange={(e) => setLocation(e.target.value)}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2 border"
-                required
+                className="w-full rounded-xl border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500"
+                placeholder="e.g., Room 101, Building A"
               />
             </div>
 
+            {/* Email */}
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
                 Contact Email
               </label>
               <input
@@ -187,13 +253,13 @@ export function CreateClubModal({ isOpen, onClose }: CreateClubModalProps) {
                 id="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2 border"
-                required
+                className="w-full rounded-xl border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500"
               />
             </div>
 
+            {/* Website */}
             <div>
-              <label htmlFor="website" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="website" className="block text-sm font-medium text-gray-700 mb-1">
                 Website
               </label>
               <input
@@ -201,47 +267,43 @@ export function CreateClubModal({ isOpen, onClose }: CreateClubModalProps) {
                 id="website"
                 value={website}
                 onChange={(e) => setWebsite(e.target.value)}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2 border"
-                required
+                className="w-full rounded-xl border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500"
+                placeholder="https://"
               />
             </div>
 
-            <div className="md:col-span-2">
-              <label htmlFor="imageFile" className="block text-sm font-medium text-gray-700">
-                Cover Image
+            {/* Image URL */}
+            <div>
+              <label htmlFor="image-url" className="block text-sm font-medium text-gray-700 mb-1">
+                Club Image URL
               </label>
-              <div className="mt-1 flex items-center space-x-2">
-                <label htmlFor="imageFile" className="cursor-pointer bg-white py-2 px-3 border border-gray-300 rounded-md shadow-sm text-sm leading-4 font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 inline-flex items-center">
-                  <Upload className="w-4 h-4 mr-2"/>
-                  Choose File
-                </label>
-                <input
-                  type="file"
-                  id="imageFile"
-                  accept="image/png, image/jpeg, image/gif"
-                  onChange={handleFileChange}
-                  className="sr-only"
-                />
-                {imageFile && <span className="text-sm text-gray-600 truncate">{imageFile.name}</span>}
-              </div>
-              <p className="text-xs text-gray-500 mt-1">PNG, JPG, GIF recommended.</p>
+              <input
+                type="url"
+                id="image-url"
+                value={imageUrl}
+                onChange={(e) => setImageUrl(e.target.value)}
+                className="w-full rounded-xl border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500"
+                placeholder="https://"
+              />
             </div>
           </div>
 
-          <div className="flex justify-end space-x-3">
+          <div className="flex justify-end gap-4">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+              className="px-6 py-2 rounded-xl border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={loading}
-              className={`px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 ${
-                loading ? 'opacity-75 cursor-not-allowed' : ''
-              }`}
+              className={cn(
+                "px-6 py-2 rounded-xl bg-purple-600 text-white",
+                "hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2",
+                loading && "opacity-75 cursor-not-allowed"
+              )}
             >
               {loading ? 'Creating...' : 'Create Club'}
             </button>

@@ -1,189 +1,206 @@
-import { useEffect, useState } from 'react'
-import { supabase } from '../lib/supabase'
-import { Database } from '../types/supabase'
-import { Button } from '../components/ui/button'
-import { useAuthStore } from '../stores/authStore'
-import { toast } from 'sonner'
-import { Loader2, Plus } from 'lucide-react'
-import { CreateAnnouncementModal } from '../components/CreateAnnouncementModal'
-import { EditAnnouncementModal } from '../components/EditAnnouncementModal'
-import { RealtimePostgresChangesPayload } from '@supabase/supabase-js'
+import { useState, useEffect } from 'react';
+import { Bell, Plus, Pencil, Trash2, ChevronRight, Tag } from 'lucide-react';
+import { supabase } from '../lib/supabase';
+import { useAuthStore } from '../stores/authStore';
+import { shallow } from 'zustand/shallow';
+import { CreateAnnouncementModal } from '../components/CreateAnnouncementModal';
+import { EditAnnouncementModal } from '../components/EditAnnouncementModal';
+import { formatDistanceToNow } from 'date-fns';
+import { cn } from '../lib/utils';
 
-type Announcement = Database['public']['Tables']['announcements']['Row']
-
-// Define the payload types more precisely
-type AnnouncementChanges = RealtimePostgresChangesPayload<{
+interface Announcement {
   id: string;
   title: string;
   message: string;
+  category: string;
   created_at: string;
   created_by?: string;
-  priority?: boolean;
-}>
+}
+
+const CATEGORY_COLORS: { [key: string]: string } = {
+  Academic: 'bg-blue-500/20 text-blue-100',
+  Events: 'bg-purple-500/20 text-purple-100',
+  Campus: 'bg-green-500/20 text-green-100',
+  Club: 'bg-yellow-500/20 text-yellow-100',
+  Sports: 'bg-orange-500/20 text-orange-100',
+  Important: 'bg-red-500/20 text-red-100',
+};
 
 export default function Announcements() {
-  const [announcements, setAnnouncements] = useState<Announcement[]>([])
-  const [loading, setLoading] = useState(true)
-  const [showCreateModal, setShowCreateModal] = useState(false)
-  const [showEditModal, setShowEditModal] = useState(false)
-  const [selectedAnnouncement, setSelectedAnnouncement] = useState<Announcement | null>(null)
-  const { user } = useAuthStore()
-  const isAdmin = user?.is_admin || false
+  const { user } = useAuthStore(state => ({ user: state.user }), shallow);
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingAnnouncement, setEditingAnnouncement] = useState<Announcement | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState('All');
 
-  const fetchData = async () => {
+  const fetchAnnouncements = async () => {
     try {
       const { data, error } = await supabase
         .from('announcements')
         .select('*')
-        .order('created_at', { ascending: false })
-
-      if (error) {
-        throw error
-      }
-
-      setAnnouncements(data || [])
-    } catch (error) {
-      console.error('Error fetching announcements:', error)
-      toast.error('Failed to load announcements')
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      setAnnouncements(data || []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load announcements');
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
-
-  const subscribeToAnnouncements = () => {
-    const subscription = supabase
-      .channel('announcements-changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'announcements'
-        },
-        (payload: AnnouncementChanges) => {
-          if (payload.eventType === 'INSERT') {
-            setAnnouncements(prev => [payload.new as Announcement, ...prev])
-          } else if (payload.eventType === 'DELETE') {
-            setAnnouncements(prev => prev.filter(ann => ann.id !== payload.old.id))
-          } else if (payload.eventType === 'UPDATE') {
-            setAnnouncements(prev => 
-              prev.map(ann => ann.id === payload.new.id ? payload.new as Announcement : ann)
-            )
-          }
-        }
-      )
-      .subscribe()
-
-    return () => {
-      subscription.unsubscribe()
-    }
-  }
+  };
 
   useEffect(() => {
-    fetchData()
-    const unsubscribe = subscribeToAnnouncements()
-    return () => {
-      unsubscribe()
-    }
-  }, [])
-
-  const handleEdit = (announcement: Announcement) => {
-    setSelectedAnnouncement(announcement)
-    setShowEditModal(true)
-  }
+    fetchAnnouncements();
+  }, []);
 
   const handleDelete = async (id: string) => {
+    if (!window.confirm('Are you sure you want to delete this announcement?')) return;
+    
     try {
       const { error } = await supabase
         .from('announcements')
         .delete()
-        .eq('id', id)
-
-      if (error) throw error
-
-      toast.success('Announcement deleted successfully')
-    } catch (error) {
-      console.error('Error deleting announcement:', error)
-      toast.error('Failed to delete announcement')
+        .eq('id', id);
+      
+      if (error) throw error;
+      await fetchAnnouncements();
+    } catch (err) {
+      console.error('Error deleting announcement:', err);
+      alert('Failed to delete announcement');
     }
-  }
+  };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <Loader2 className="h-8 w-8 animate-spin" />
-      </div>
-    )
-  }
+  const filteredAnnouncements = selectedCategory === 'All'
+    ? announcements
+    : announcements.filter(a => a.category === selectedCategory);
+
+  const categories = ['All', ...Object.keys(CATEGORY_COLORS)];
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Announcements</h1>
-        {isAdmin && (
-          <Button onClick={() => setShowCreateModal(true)}>
-            <Plus className="h-4 w-4 mr-2" />
-            New Announcement
-          </Button>
-        )}
-      </div>
-
-      <div className="space-y-4">
-        {announcements.map((announcement) => (
-          <div
-            key={announcement.id}
-            className={`p-4 rounded-lg shadow ${
-              announcement.priority ? 'bg-red-50 border border-red-200' : 'bg-white'
-            }`}
-          >
-            <div className="flex justify-between items-start">
-              <div>
-                <h3 className="text-lg font-semibold">{announcement.title}</h3>
-                <p className="text-gray-600 mt-2">{announcement.message}</p>
-                <p className="text-sm text-gray-500 mt-2">
-                  Posted on {new Date(announcement.created_at).toLocaleDateString()}
-                </p>
-              </div>
-              {isAdmin && (
-                <div className="flex space-x-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleEdit(announcement)}
-                  >
-                    Edit
-                  </Button>
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    onClick={() => handleDelete(announcement.id)}
-                  >
-                    Delete
-                  </Button>
-                </div>
-              )}
+    <div className="min-h-screen bg-gradient-to-br from-rose-900 via-rose-800 to-rose-900">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-8 mb-8">
+          <div className="flex justify-between items-center mb-6">
+            <div>
+              <h1 className="text-4xl font-bold text-white mb-2">Announcements</h1>
+              <p className="text-rose-200">Stay in the loop with the latest updates</p>
             </div>
+            {user?.is_admin && (
+              <button 
+                onClick={() => setIsCreateModalOpen(true)}
+                className="flex items-center px-6 py-3 bg-white/20 hover:bg-white/30 text-white rounded-xl transition-all duration-300 backdrop-blur-sm"
+              >
+                <Plus className="w-5 h-5 mr-2" /> New Announcement
+              </button>
+            )}
           </div>
-        ))}
+
+          {/* Category Filter */}
+          <div className="flex flex-wrap gap-2 mb-6">
+            {categories.map((category) => (
+              <button
+                key={category}
+                onClick={() => setSelectedCategory(category)}
+                className={cn(
+                  "px-4 py-2 rounded-xl text-sm font-medium transition-all duration-300",
+                  selectedCategory === category
+                    ? "bg-white text-rose-600"
+                    : "bg-white/10 text-white hover:bg-white/20"
+                )}
+              >
+                {category}
+              </button>
+            ))}
+          </div>
+
+          {loading ? (
+            <div className="text-center py-10">
+              <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-white mx-auto mb-4"></div>
+              <p className="text-rose-200">Loading announcements...</p>
+            </div>
+          ) : error ? (
+            <div className="text-center py-10 text-red-400">{error}</div>
+          ) : filteredAnnouncements.length === 0 ? (
+            <div className="text-center py-10">
+              <Bell className="w-12 h-12 text-rose-300 mx-auto mb-4" />
+              <p className="text-rose-200">
+                {selectedCategory === 'All'
+                  ? 'No announcements yet'
+                  : `No ${selectedCategory} announcements yet`}
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {filteredAnnouncements.map((announcement) => (
+                <div 
+                  key={announcement.id}
+                  className="group bg-white/10 backdrop-blur-md rounded-xl overflow-hidden hover:bg-white/20 transition-all duration-300"
+                >
+                  <div className="p-6">
+                    <div className="flex justify-between items-start mb-4">
+                      <div>
+                        <div className="flex items-center gap-3 mb-2">
+                          <h3 className="text-xl font-semibold text-white">{announcement.title}</h3>
+                          <span className={cn(
+                            "px-2 py-1 rounded-lg text-xs font-medium",
+                            CATEGORY_COLORS[announcement.category] || "bg-gray-500/20 text-gray-100"
+                          )}>
+                            {announcement.category}
+                          </span>
+                        </div>
+                        <p className="text-rose-200 text-sm">
+                          {formatDistanceToNow(new Date(announcement.created_at), { addSuffix: true })}
+                        </p>
+                      </div>
+                      {(user?.is_admin || user?.id === announcement.created_by) && (
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => {
+                              setEditingAnnouncement(announcement);
+                              setIsEditModalOpen(true);
+                            }}
+                            className="p-2 text-rose-200 hover:text-white rounded-lg bg-white/10 hover:bg-white/20 transition-all duration-300"
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(announcement.id)}
+                            className="p-2 text-rose-200 hover:text-white rounded-lg bg-white/10 hover:bg-white/20 transition-all duration-300"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                    <p className="text-rose-100 leading-relaxed">{announcement.message}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
-      {showCreateModal && (
-        <CreateAnnouncementModal
-          isOpen={showCreateModal}
-          onClose={() => setShowCreateModal(false)}
-        />
-      )}
+      <CreateAnnouncementModal
+        isOpen={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+        onAnnouncementCreated={fetchAnnouncements}
+      />
 
-      {showEditModal && selectedAnnouncement && (
+      {editingAnnouncement && (
         <EditAnnouncementModal
-          isOpen={showEditModal}
+          isOpen={isEditModalOpen}
           onClose={() => {
-            setShowEditModal(false)
-            setSelectedAnnouncement(null)
+            setIsEditModalOpen(false);
+            setEditingAnnouncement(null);
           }}
-          announcement={selectedAnnouncement}
+          announcement={editingAnnouncement}
+          onAnnouncementUpdated={fetchAnnouncements}
         />
       )}
     </div>
-  )
+  );
 }
