@@ -1,0 +1,618 @@
+import { useState, useEffect, useMemo, useCallback } from 'react'; // Import useCallback
+import { useNavigate } from 'react-router-dom'; // Import useNavigate
+import { Calendar as CalendarIcon, MapPin, Clock, Users, Plus, Check, X, Star, Pencil, Trash2 } from 'lucide-react'; // Renamed Calendar icon import
+import { supabase } from '../lib/supabase';
+import { useAuthStore } from '../stores/authStore';
+import { useRealtimeStore } from '../stores/realtimeStore';
+import { shallow } from 'zustand/shallow'; // Import shallow
+import { CreateEventModal } from '../components/CreateEventModal';
+import { EditEventModal } from '../components/EditEventModal';
+import { Calendar, dateFnsLocalizer, Event as CalendarEvent } from 'react-big-calendar'; // Import Calendar component and Event type
+import { format, parse, startOfWeek, getDay } from 'date-fns'; // Standard imports
+import { enUS } from 'date-fns/locale/en-US'; // Import as named export, not default
+import 'react-big-calendar/lib/css/react-big-calendar.css'; // Import calendar styles
+
+// Define our custom event type extending the base CalendarEvent
+interface CustomEvent extends CalendarEvent {
+  resource?: any;
+  id: string;
+  title: string;
+  description: string;
+  date: string;
+  time: string;
+  location: string;
+  club: { name: string; }[] | null;
+  club_id: string | null;
+  capacity: number;
+  image_url: string;
+  registered_count: number;
+  is_registered?: boolean;
+  category?: string;
+  created_by?: string;
+  start: Date;
+  end: Date;
+}
+
+// Interface for Event data, including optional fields
+interface Event {
+  id: string;
+  title: string;
+  description: string;
+  date: string;
+  time: string;
+  location: string;
+  club: { name: string; }[] | null; // Keep this for display if needed
+  club_id: string | null; // Add club_id
+  capacity: number;
+  image_url: string;
+  registered_count: number; // Added dynamically
+  is_registered?: boolean; // Added dynamically
+  category?: string; // Optional category for filtering
+  created_by?: string; // Add creator ID
+  // Add start and end properties for the calendar
+  start?: Date;
+  end?: Date;
+}
+
+// Type for the raw data structure from Supabase queries
+// Ensure this includes all fields selected directly from the 'events' table
+interface RawEventSelect {
+  id: string;
+  title: string;
+  description: string;
+  date: string;
+  time: string;
+  location: string;
+  club: { name: string; }[] | null; // This comes from the join, keep it if needed for display
+  club_id: string | null; // Add club_id fetched directly
+  capacity: number;
+  image_url: string;
+  category?: string;
+  created_by?: string; // Add created_by fetched directly
+}
+
+export function Events() {
+  // Use shallow comparison for the user object
+  const { user, loading: authLoading } = useAuthStore(
+    state => ({ 
+      user: state.user, 
+      loading: state.loading 
+    }), 
+    shallow
+  );
+  const { subscribeToEvents, onEventsChange, unsubscribeAll } = useRealtimeStore();
+  const [events, setEvents] = useState<CustomEvent[]>([]); // Main list of events
+  const [suggestedEvents, setSuggestedEvents] = useState<CustomEvent[]>([]); // Suggested events
+  const [registrations, setRegistrations] = useState<Set<string>>(new Set());
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false); // State for edit modal
+  const [editingEvent, setEditingEvent] = useState<CustomEvent | null>(null); // State for event being edited
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [actionLoadingEventId, setActionLoadingEventId] = useState<string | null>(null);
+  const navigate = useNavigate(); // Hook for navigation
+
+  // Setup for react-big-calendar with explicit formats
+  const locales = { 'en-US': enUS };
+  
+  // Define explicit formats object with proper types
+  const formats = {
+    dateFormat: 'dd',
+    dayFormat: 'dd EEE',
+    weekdayFormat: 'EEE',
+    monthHeaderFormat: 'MMMM yyyy',
+    dayHeaderFormat: 'EEEE MMM d',
+    dayRangeHeaderFormat: ({ start, end }: { start: Date, end: Date }) => 
+      `${format(start, 'MMM dd')} - ${format(end, 'MMM dd, yyyy')}`,
+    timeGutterFormat: 'h:mm a',
+    agendaDateFormat: 'EEE MMM dd',
+    agendaTimeFormat: 'h:mm a',
+    agendaTimeRangeFormat: ({ start, end }: { start: Date, end: Date }) => 
+      `${format(start, 'h:mm a')} - ${format(end, 'h:mm a')}`,
+  };
+
+  const localizer = dateFnsLocalizer({
+    format,
+    parse,
+    startOfWeek,
+    getDay,
+    locales,
+    formats, // Add explicit formats
+  });
+
+  // Wrap fetchData in useCallback
+  const fetchData = useCallback(async () => {
+    // Only set loading true if there's no data currently displayed
+    if (events.length === 0 && suggestedEvents.length === 0) {
+        setLoading(true);
+    }
+    // setError(null); // Reset error later or on success/start
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      let joinedClubIds: string[] = [];
+      let fetchedSuggestedEvents: RawEventSelect[] = []; // Corrected type declaration
+      let fetchedEventsData: RawEventSelect[] = []; // Use specific type
+
+      // 1. Fetch user's joined club IDs
+      if (user?.id) {
+        // Corrected destructuring: added comma
+        const { data: membershipData, error: membershipError } = await supabase
+          .from('club_memberships')
+          .select('club_id')
+          .eq('user_id', user.id);
+        if (membershipError) throw membershipError;
+        joinedClubIds = membershipData?.map(m => m.club_id) || [];
+      }
+
+      // 2. Fetch suggested events (upcoming events from joined clubs)
+      if (joinedClubIds.length > 0) {
+        const { data: suggestedData, error: suggestedError } = await supabase
+          .from('events')
+          .select(`*, created_by, club_id, club:clubs ( name )`) // Select club_id
+          .in('club_id', joinedClubIds)
+          .gte('date', today)
+          .order('date', { ascending: true })
+          .limit(3); // Limit suggestions
+        if (suggestedError) throw suggestedError;
+        // Cast to RawEventSelect[] first
+        fetchedSuggestedEvents = (suggestedData || []) as RawEventSelect[];
+      }
+
+      // 3. Fetch all other upcoming events (excluding suggested ones)
+      let query = supabase
+        .from('events')
+        .select(`*, created_by, club_id, club:clubs ( name )`) // Select club_id (already done)
+        .gte('date', today)
+        .order('date', { ascending: true });
+
+      const suggestedIds = fetchedSuggestedEvents.map(e => e.id);
+      if (suggestedIds.length > 0) {
+        query = query.not('id', 'in', `(${suggestedIds.join(',')})`);
+      }
+
+      const { data: eventsDataResult, error: eventsError } = await query;
+      if (eventsError) throw eventsError;
+      fetchedEventsData = (eventsDataResult || []) as RawEventSelect[];
+
+      // 4. Fetch user's registrations for all potentially displayed events
+      let userRegistrations = new Set<string>();
+      const allPotentialEventIds = [...suggestedIds, ...fetchedEventsData.map(e => e.id)];
+      if (user?.id && allPotentialEventIds.length > 0) {
+        const { data: regData, error: regError } = await supabase
+          .from('event_registrations')
+          .select('event_id')
+          .eq('user_id', user.id)
+          .in('event_id', allPotentialEventIds);
+        if (regError) throw regError;
+        userRegistrations = new Set(regData?.map(r => r.event_id) || []);
+      }
+      setRegistrations(userRegistrations);
+
+      // 5. Get registration counts and combine data
+      const allEventsData = [...fetchedSuggestedEvents, ...fetchedEventsData];
+      const eventsWithCounts = await Promise.all(allEventsData.map(async (event) => {
+        const { count } = await supabase
+          .from('event_registrations')
+          .select('*', { count: 'exact' })
+          .eq('event_id', event.id);
+
+        // Parse date and time
+        const dateObj = parse(event.date, 'yyyy-MM-dd', new Date());
+        const [hours, minutes] = (event.time || '00:00').split(':');
+        const startDate = new Date(dateObj);
+        startDate.setHours(parseInt(hours, 10), parseInt(minutes, 10));
+        const endDate = new Date(startDate.getTime() + 60 * 60 * 1000); // Add 1 hour
+
+        return {
+          ...event,
+          registered_count: count || 0,
+          start: startDate,
+          end: endDate
+        };
+      }));
+
+      // Separate suggestions and main list again after adding counts
+      const finalSuggested: CustomEvent[] = eventsWithCounts.filter(e => suggestedIds.includes(e.id)) as CustomEvent[];
+      const finalEvents: CustomEvent[] = eventsWithCounts.filter(e => !suggestedIds.includes(e.id)) as CustomEvent[];
+
+      setSuggestedEvents(finalSuggested);
+      setEvents(finalEvents);
+      setError(null); // Clear error on successful fetch
+
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load data');
+      // Don't clear data on error, keep showing potentially stale data instead of flashing empty
+      // setEvents([]);
+      // setSuggestedEvents([]);
+      // setRegistrations(new Set());
+    } finally {
+      setLoading(false);
+    }
+  // Update dependencies for useCallback: only depend on user?.id
+  }, [user?.id, events.length, suggestedEvents.length]); // Keep length dependencies for the loading check
+
+  // Fetch data when the memoized fetchData function changes (effectively, when user?.id changes)
+  // Also, ensure auth isn't loading initially to avoid double fetch on load
+  useEffect(() => {
+    if (!authLoading) { // Only fetch if auth is not in its initial loading state
+        fetchData();
+      
+      // Set up real-time subscription
+      if (subscribeToEvents && onEventsChange) {
+        subscribeToEvents();
+        onEventsChange((payload) => {
+          console.log('Real-time event update:', payload);
+          fetchData();
+        });
+      }
+
+      // Cleanup subscriptions
+      return () => {
+        if (unsubscribeAll) {
+          unsubscribeAll();
+        }
+      };
+    }
+  }, [fetchData, authLoading, subscribeToEvents, onEventsChange, unsubscribeAll]);
+
+  // Add is_registered flag to both lists using useMemo
+   const suggestedEventsWithReg = useMemo(() => {
+     return suggestedEvents.map(event => ({
+       ...event,
+       is_registered: registrations.has(event.id)
+     }));
+   }, [suggestedEvents, registrations]);
+
+   const eventsWithReg = useMemo(() => {
+     return events.map(event => ({
+       ...event,
+       is_registered: registrations.has(event.id)
+     }));
+   }, [events, registrations]);
+
+  // Define the type for the calendar event object explicitly
+  interface MyCalendarEvent extends CalendarEvent {
+    title: string;
+    resource: CustomEvent; // Ensure resource holds our original Event type
+  }
+
+  // Format events for the calendar
+  const calendarEvents: MyCalendarEvent[] = useMemo(() => { // Use the explicit type
+    return [...suggestedEventsWithReg, ...eventsWithReg].map(event => {
+      // Parse date and time separately since time is in 24-hour format
+      const dateObj = parse(event.date, 'yyyy-MM-dd', new Date());
+      const [hours, minutes] = (event.time || '00:00').split(':');
+      
+      if (isNaN(dateObj.getTime())) {
+        console.warn(`Failed to parse date for event "${event.title}": date='${event.date}'`);
+        return null;
+      }
+
+      // Set the time on the date object
+      const startDate = new Date(dateObj);
+      startDate.setHours(parseInt(hours, 10), parseInt(minutes, 10));
+      
+      // Set a default end time (e.g., 1 hour after start)
+      const endDate = new Date(startDate.getTime() + 60 * 60 * 1000); // Add 1 hour
+
+      // Explicitly create the object for the calendar
+      return {
+        title: event.title,
+        start: startDate,
+        end: endDate,
+        resource: event, // Store the original event object in the resource field
+      };
+    }).filter(event => event !== null) as MyCalendarEvent[]; // Filter out nulls from failed parsing
+  }, [suggestedEventsWithReg, eventsWithReg]);
+
+  // Log the calendar events to check the is_registered flag
+  useEffect(() => {
+    console.log("Calendar Events Data:", calendarEvents);
+  }, [calendarEvents]);
+
+  // Function to apply styles to calendar events
+  const eventPropGetter = useCallback(
+    (event: MyCalendarEvent) => {
+      const props: { className?: string; style?: React.CSSProperties } = {};
+      if (event.resource.is_registered) {
+        props.className = 'registered-event';
+      }
+      return props;
+    },
+    [registrations]
+  );
+
+  // Handle Register
+  const handleRegister = async (eventId: string) => {
+    if (!user) {
+      alert('Please sign in to register.'); // TODO: Open AuthModal
+      return;
+    }
+    setActionLoadingEventId(eventId);
+    try {
+      const { error } = await supabase
+        .from('event_registrations')
+        .insert({ event_id: eventId, user_id: user.id });
+      if (error) throw error;
+      // Update local state immediately for responsiveness
+      setRegistrations(prev => new Set(prev).add(eventId));
+      // Update counts in both lists
+      setEvents(prevEvents => prevEvents.map(e => e.id === eventId ? {...e, registered_count: e.registered_count + 1} : e));
+      setSuggestedEvents(prevEvents => prevEvents.map(e => e.id === eventId ? {...e, registered_count: e.registered_count + 1} : e));
+      // Optionally refetch in background or rely on local update
+      // await fetchData();
+    } catch (err) {
+      console.error("Error registering for event:", err);
+      alert(err instanceof Error ? err.message : 'Failed to register');
+      // Revert optimistic update if needed, or refetch
+      await fetchData();
+    } finally {
+      setActionLoadingEventId(null);
+    }
+  };
+
+  // Handle Unregister
+  const handleUnregister = async (eventId: string) => {
+    if (!user) return;
+    setActionLoadingEventId(eventId);
+    try {
+      const { error } = await supabase
+        .from('event_registrations')
+        .delete()
+        .eq('event_id', eventId)
+        .eq('user_id', user.id);
+
+      // Explicitly check the error returned by the delete operation
+      if (error) {
+        console.error("Supabase delete error:", error);
+        throw new Error(`Failed to unregister: ${error.message}`);
+      }
+
+      // Only refetch data if the delete operation was successful (no error)
+      console.log("Unregistration successful, refetching data...");
+      await fetchData();
+
+    } catch (err) {
+      console.error("Error unregistering from event:", err);
+      alert(err instanceof Error ? err.message : 'Failed to unregister');
+      // Do not refetch on error
+    } finally {
+      setActionLoadingEventId(null);
+    }
+  };
+
+  // Handle Delete Event
+  const handleDeleteEvent = async (eventId: string) => {
+    if (!user) return; // Should not happen if button is shown correctly
+
+    if (!window.confirm("Are you sure you want to delete this event? This action cannot be undone.")) {
+      return;
+    }
+
+    setActionLoadingEventId(eventId); // Use same loading state for delete
+    try {
+      const { error } = await supabase
+        .from('events')
+        .delete()
+        .eq('id', eventId);
+
+      if (error) {
+        console.error("Supabase delete event error:", error);
+        throw new Error(`Failed to delete event: ${error.message}`);
+      }
+
+      console.log("Event deleted successfully, refetching data...");
+      await fetchData(); // Refetch data to update the list
+
+    } catch (err) {
+      console.error("Error deleting event:", err);
+      alert(err instanceof Error ? err.message : 'Failed to delete event');
+    } finally {
+      setActionLoadingEventId(null);
+    }
+  };
+
+  // Function to open the edit modal
+  const openEditModal = (eventToEdit: CustomEvent) => {
+    setEditingEvent(eventToEdit);
+    setIsEditModalOpen(true);
+  };
+
+
+  // Reusable function to render an event card (kept for suggested events)
+  const renderEventCard = (event: CustomEvent) => (
+    <div key={event.id} className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow duration-300">
+      {/* Event image with overlay */}
+      <div className="relative h-48">
+        <img 
+          src={event.image_url || '/default-event.jpg'} 
+          alt={event.title}
+          className="w-full h-full object-cover"
+        />
+        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-4">
+          <h3 className="text-white text-xl font-semibold">{event.title}</h3>
+          {/* Action buttons for event creator */}
+          {user && event.created_by === user.id && (
+            <div className="absolute top-4 right-4 flex space-x-2">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  openEditModal(event);
+                }}
+                className="p-2 bg-indigo-600 text-white rounded-full hover:bg-indigo-700 transition-colors"
+                title="Edit Event"
+              >
+                <Pencil className="w-4 h-4" />
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleDeleteEvent(event.id);
+                }}
+                className="p-2 bg-red-600 text-white rounded-full hover:bg-red-700 transition-colors"
+                title="Delete Event"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+      
+      {/* Event details */}
+      <div className="p-4">
+        <div className="flex items-center space-x-2 text-sm text-gray-600 mb-2">
+          <CalendarIcon className="w-4 h-4" />
+          <span>{new Date(event.date).toLocaleDateString()}</span>
+          <Clock className="w-4 h-4 ml-2" />
+          <span>{event.time}</span>
+        </div>
+        
+        <div className="flex items-center space-x-2 text-sm text-gray-600 mb-3">
+          <MapPin className="w-4 h-4" />
+          <span>{event.location}</span>
+        </div>
+        
+        <p className="text-gray-700 mb-4 line-clamp-2">{event.description}</p>
+        
+        {/* Capacity and registration */}
+        <div className="flex justify-between items-center">
+          <div className="text-sm text-gray-600">
+            <Users className="w-4 h-4 inline mr-1" />
+            {event.registered_count}/{event.capacity} registered
+          </div>
+          {actionLoadingEventId === event.id ? (
+            <button className="bg-gray-400 text-white px-4 py-2 rounded-md cursor-not-allowed">
+              Loading...
+            </button>
+          ) : event.is_registered ? (
+            <button
+              onClick={() => handleUnregister(event.id)}
+              className="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 flex items-center space-x-1"
+            >
+              <X className="w-4 h-4" />
+              <span>Unregister</span>
+            </button>
+          ) : (
+            <button
+              onClick={() => handleRegister(event.id)}
+              className="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 flex items-center space-x-1"
+              disabled={event.registered_count >= event.capacity}
+            >
+              <Check className="w-4 h-4" />
+              <span>Register</span>
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+
+  // Loading State - Show only if loading AND no events exist yet
+  if (loading && calendarEvents.length === 0 && suggestedEventsWithReg.length === 0) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        <div className="text-center text-gray-600">Loading events...</div>
+      </div>
+    );
+  }
+
+  // Error State
+  if (error) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        <div className="text-red-600 text-center">Error: {error}</div>
+      </div>
+    );
+  }
+
+  // Main Content
+  return (
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="flex justify-between items-center mb-8">
+         <h1 className="text-3xl font-bold text-gray-900">Events Calendar</h1>
+        {/* Keep Create Event button accessible */}
+        <button
+          onClick={() => setIsCreateModalOpen(true)}
+          className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
+        >
+          <Plus className="w-5 h-5 mr-2" />
+          Create Event
+        </button>
+      </div>
+
+      {/* Suggested Events Section */}
+      {user && suggestedEventsWithReg.length > 0 && (
+        <div className="mb-12">
+           <h2 className="text-2xl font-semibold text-gray-800 mb-6 flex items-center">
+             <Star className="w-6 h-6 mr-2 text-yellow-500"/>
+             Suggested for You
+           </h2>
+           <div className="space-y-8">
+             {suggestedEventsWithReg.map(renderEventCard)}
+           </div>
+           <hr className="my-12 border-gray-300"/>
+        </div>
+      )}
+
+      {/* --- Calendar View --- */}
+      <div className="mb-12 bg-white/90 p-4 rounded-lg shadow-md backdrop-blur-sm" style={{ height: '70vh' }}> {/* Added container with height */}
+        {/* Use standard JSX syntax for Calendar */}
+        <Calendar<MyCalendarEvent>
+          localizer={localizer}
+          events={calendarEvents}
+          startAccessor="start"
+          endAccessor="end"
+          style={{ height: '100%' }} // Make calendar fill container height
+          onSelectEvent={(event: MyCalendarEvent) => navigate(`/events/${event.resource.id}`)} // Use the explicit type here too
+          eventPropGetter={eventPropGetter} // Apply the style getter
+          // TODO: Add more props like views, defaultView, toolbar customization etc.
+        />
+      </div>
+
+      {/* --- List View (Optional - kept for reference or if needed) --- */}
+      {/*
+      {user && suggestedEventsWithReg.length > 0 && (
+        <div className="mb-12">
+           <h2 className="text-2xl font-semibold text-gray-800 mb-6 flex items-center">
+             <Star className="w-6 h-6 mr-2 text-yellow-500"/>
+             Suggested for You
+           </h2>
+           <div className="space-y-8">
+             {suggestedEventsWithReg.map(renderEventCard)}
+           </div>
+           <hr className="my-12 border-gray-300"/>
+        </div>
+      )}
+      <h2 className="text-2xl font-semibold text-gray-800 mb-6">Upcoming Events</h2>
+      {eventsWithReg.length > 0 ? (
+         <div className="space-y-8">
+           {eventsWithReg.map(renderEventCard)}
+         </div>
+      ) : (
+         <p className="text-gray-500">No other upcoming events found.</p>
+      )}
+      */}
+
+      {/* --- Modals --- */}
+      <CreateEventModal
+        isOpen={isCreateModalOpen}
+        onClose={() => {
+          setIsCreateModalOpen(false);
+          fetchData(); // Refetch data after create modal closes
+        }}
+      />
+
+      {/* Render the Edit Modal */}
+      <EditEventModal
+        isOpen={isEditModalOpen}
+        event={editingEvent}
+        onClose={() => {
+          setIsEditModalOpen(false);
+          setEditingEvent(null); // Clear selected event
+          fetchData(); // Refetch data after edit modal closes
+        }}
+      />
+    </div>
+  );
+}
